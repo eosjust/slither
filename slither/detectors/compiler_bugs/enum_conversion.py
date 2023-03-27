@@ -1,25 +1,22 @@
 """
 Module detecting dangerous conversion to enum
 """
+from typing import List, Tuple
 
-from slither.detectors.abstract_detector import AbstractDetector, DetectorClassification
+from slither.core.cfg.node import Node
+from slither.core.declarations import Contract
+from slither.core.source_mapping.source_mapping import SourceMapping
+from slither.detectors.abstract_detector import (
+    AbstractDetector,
+    DetectorClassification,
+    make_solc_versions,
+)
 from slither.slithir.operations import TypeConversion
 from slither.core.declarations.enum import Enum
+from slither.utils.output import Output
 
 
-def _uses_vulnerable_solc_version(version):
-    """Detect if used compiler version is 0.4.[0|1|2|3|4]
-    Args:
-       version (solc version used)
-    Returns:
-       Bool
-    """
-    if version in ["0.4.0", "0.4.1", "0.4.2", "0.4.3", "0.4.4"]:
-        return True
-    return False
-
-
-def _detect_dangerous_enum_conversions(contract):
+def _detect_dangerous_enum_conversions(contract: Contract) -> List[Tuple[Node, SourceMapping]]:
     """Detect dangerous conversion to enum by checking IR
     Args:
          contract (Contract)
@@ -54,11 +51,11 @@ class EnumConversion(AbstractDetector):
 ```solidity
     pragma solidity 0.4.2;
     contract Test{
-    
+
     enum E{a}
-    
+
     function bug(uint a) public returns(E){
-        return E(a);   
+        return E(a);
     }
 }
 ```
@@ -67,12 +64,11 @@ Attackers can trigger unexpected behaviour by calling `bug(1)`."""
 
     WIKI_RECOMMENDATION = "Use a recent compiler version. If `solc` <`0.4.5` is required, check the `enum` conversion range."
 
-    def _detect(self):
+    VULNERABLE_SOLC_VERSIONS = make_solc_versions(4, 0, 4)
+
+    def _detect(self) -> List[Output]:
         """Detect dangerous conversion to enum"""
         results = []
-        # If solc version >= 0.4.5 then return
-        if not _uses_vulnerable_solc_version(self.compilation_unit.solc_version):
-            return results
 
         for c in self.compilation_unit.contracts:
             ret = _detect_dangerous_enum_conversions(c)

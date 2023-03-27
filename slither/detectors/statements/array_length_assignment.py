@@ -1,16 +1,23 @@
 """
 Module detecting assignment of array length
 """
-
-from slither.detectors.abstract_detector import AbstractDetector, DetectorClassification
-from slither.core.cfg.node import NodeType
+from typing import List, Set
+from slither.detectors.abstract_detector import (
+    AbstractDetector,
+    DetectorClassification,
+    ALL_SOLC_VERSIONS_04,
+    ALL_SOLC_VERSIONS_05,
+)
+from slither.core.cfg.node import Node, NodeType
 from slither.slithir.operations import Assignment, Length
 from slither.slithir.variables.reference import ReferenceVariable
 from slither.slithir.operations.binary import Binary
 from slither.analyses.data_dependency.data_dependency import is_tainted
+from slither.core.declarations.contract import Contract
+from slither.utils.output import Output
 
 
-def detect_array_length_assignment(contract):
+def detect_array_length_assignment(contract: Contract) -> Set[Node]:
     """
     Detects and returns all nodes which assign array length.
     :param contract: Contract to detect assignment within.
@@ -103,14 +110,13 @@ Note that storage slots here are indexed via a hash of the indexers; nonetheless
 Otherwise, thoroughly review the contract to ensure a user-controlled variable cannot reach an array length assignment."""
     # endregion wiki_recommendation
 
-    def _detect(self):
+    VULNERABLE_SOLC_VERSIONS = ALL_SOLC_VERSIONS_04 + ALL_SOLC_VERSIONS_05
+
+    def _detect(self) -> List[Output]:
         """
         Detect array length assignments
         """
         results = []
-        # Starting from 0.6 .length is read only
-        if self.compilation_unit.solc_version >= "0.6.":
-            return results
         for contract in self.contracts:
             array_length_assignments = detect_array_length_assignment(contract)
             if array_length_assignments:

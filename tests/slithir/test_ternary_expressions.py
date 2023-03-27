@@ -1,3 +1,4 @@
+from solc_select import solc_select
 from slither import Slither
 from slither.core.cfg.node import NodeType
 from slither.slithir.operations import Assignment
@@ -6,13 +7,14 @@ from slither.core.expressions import AssignmentOperation, TupleExpression
 # pylint: disable=too-many-nested-blocks
 def test_ternary_conversions() -> None:
     """This tests that true and false sons define the same number of variables that the father node declares"""
+    solc_select.switch_global_version("0.8.0", always_install=True)
     slither = Slither("./tests/slithir/ternary_expressions.sol")
     for contract in slither.contracts:
         for function in contract.functions:
+            vars_declared = 0
+            vars_assigned = 0
             for node in function.nodes:
                 if node.type in [NodeType.IF, NodeType.IFLOOP]:
-                    vars_declared = 0
-                    vars_assigned = 0
 
                     # Iterate over true and false son
                     for inner_node in node.sons:
@@ -31,7 +33,7 @@ def test_ternary_conversions() -> None:
                             if isinstance(ir, Assignment):
                                 vars_assigned += 1
 
-                    assert vars_declared == vars_assigned
+            assert vars_declared == vars_assigned
 
 
 if __name__ == "__main__":

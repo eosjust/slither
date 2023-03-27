@@ -24,7 +24,14 @@ from slither.detectors.abstract_detector import AbstractDetector, DetectorClassi
 from slither.printers import all_printers
 from slither.printers.abstract_printer import AbstractPrinter
 from slither.slither import Slither
-from slither.utils.output import output_to_json, output_to_zip, output_to_sarif, ZIP_TYPES_ACCEPTED
+from slither.utils import codex
+from slither.utils.output import (
+    output_to_json,
+    output_to_zip,
+    output_to_sarif,
+    ZIP_TYPES_ACCEPTED,
+    Output,
+)
 from slither.utils.output_capture import StandardOutputCapture
 from slither.utils.colors import red, set_colorization_enabled
 from slither.utils.command_line import (
@@ -69,9 +76,6 @@ def process_single(
     ast = "--ast-compact-json"
     if args.legacy_ast:
         ast = "--ast-json"
-    if args.checklist:
-        args.show_ignored_findings = True
-
     slither = Slither(target, ast_format=ast, **vars(args))
 
     return _process(slither, detector_classes, printer_classes)
@@ -111,7 +115,7 @@ def _process(
     slither: Slither,
     detector_classes: List[Type[AbstractDetector]],
     printer_classes: List[Type[AbstractPrinter]],
-) -> Tuple[Slither, List[Dict], List[Dict], int]:
+) -> Tuple[Slither, List[Dict], List[Output], int]:
     for detector_cls in detector_classes:
         slither.register_detector(detector_cls)
 
@@ -124,9 +128,9 @@ def _process(
     results_printers = []
 
     if not printer_classes:
-        detector_results = slither.run_detectors()
-        detector_results = [x for x in detector_results if x]  # remove empty results
-        detector_results = [item for sublist in detector_results for item in sublist]  # flatten
+        detector_resultss = slither.run_detectors()
+        detector_resultss = [x for x in detector_resultss if x]  # remove empty results
+        detector_results = [item for sublist in detector_resultss for item in sublist]  # flatten
         results_detectors.extend(detector_results)
 
     else:
@@ -166,7 +170,6 @@ def process_from_asts(
 def get_detectors_and_printers() -> Tuple[
     List[Type[AbstractDetector]], List[Type[AbstractPrinter]]
 ]:
-
     detectors_ = [getattr(all_detectors, name) for name in dir(all_detectors)]
     detectors = [d for d in detectors_ if inspect.isclass(d) and issubclass(d, AbstractDetector)]
 
@@ -286,7 +289,6 @@ def parse_filter_paths(args: argparse.Namespace) -> List[str]:
 def parse_args(
     detector_classes: List[Type[AbstractDetector]], printer_classes: List[Type[AbstractPrinter]]
 ) -> argparse.Namespace:
-
     usage = "slither target [flag]\n"
     usage += "\ntarget can be:\n"
     usage += "\t- file.sol // a Solidity file\n"
@@ -512,7 +514,7 @@ def parse_args(
 
     group_misc.add_argument(
         "--filter-paths",
-        help="Comma-separated list of paths for which results will be excluded",
+        help="Regex filter to exclude detector results matching file path e.g. (mocks/|test/)",
         action="store",
         dest="filter_paths",
         default=defaults_flag_in_config["filter_paths"],
@@ -555,6 +557,15 @@ def parse_args(
         action="store_true",
         default=False,
     )
+
+    group_misc.add_argument(
+        "--no-fail",
+        help="Do not fail in case of parsing (echidna mode only)",
+        action="store_true",
+        default=defaults_flag_in_config["no_fail"],
+    )
+
+    codex.init_parser(parser)
 
     # debugger command
     parser.add_argument("--debug", help=argparse.SUPPRESS, action="store_true", default=False)
@@ -746,7 +757,7 @@ def main_impl(
 
     # If we are outputting JSON, capture all standard output. If we are outputting to stdout, we block typical stdout
     # output.
-    if outputting_json or output_to_sarif:
+    if outputting_json or outputting_sarif:
         StandardOutputCapture.enable(outputting_json_stdout or outputting_sarif_stdout)
 
     printer_classes = choose_printers(args, all_printer_classes)
@@ -857,7 +868,9 @@ def main_impl(
 
         # Output our results to markdown if we wish to compile a checklist.
         if args.checklist:
-            output_results_to_markdown(results_detectors, args.checklist_limit)
+            output_results_to_markdown(
+                results_detectors, args.checklist_limit, args.show_ignored_findings
+            )
 
         # Don't print the number of result for printers
         if number_contracts == 0:
